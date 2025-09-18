@@ -54,6 +54,7 @@ if "last_outcome" not in ss: ss.last_outcome = None
 if "start_time" not in ss: ss.start_time = time.time()  # 全体開始
 if "history" not in ss: ss.history = []  # [(順番, 単語, 意味, 正誤, 解答時間秒)]
 if "show_save_ui" not in ss: ss.show_save_ui = False
+if "user_name" not in ss: ss.user_name = ""
 if "counter" not in ss: ss.counter = 1   # 学習順序カウンタ
 if "question_start_time" not in ss: ss.question_start_time = None  # 各問題開始時刻
 
@@ -103,11 +104,10 @@ def prepare_csv():
         rec = list(record) if isinstance(record, (list, tuple)) else [record]
         while len(rec) < 5:
             rec.append("")
-        rec = rec[:5]  # 多すぎても切り詰める
+        rec = rec[:5]
 
         order, word, meaning, result, elapsed = rec
 
-        # ✅ elapsed を数値に揃える
         try:
             elapsed_int = int(elapsed)
         except:
@@ -116,13 +116,12 @@ def prepare_csv():
         total_seconds += elapsed_int
         cleaned_history.append((order, word, meaning, result, format_time(elapsed_int)))
 
-    # ✅ DataFrame化
     history_df = pd.DataFrame(
         cleaned_history,
         columns=["順番", "単語", "意味", "正誤", "解答時間"]
     )
 
-    # ✅ 合計時間を冒頭に追加（分 秒）
+    # ✅ 合計時間を冒頭に追加
     total_time_str = format_time(total_seconds)
     total_row = pd.DataFrame(
         [["", "", "", "合計時間", total_time_str]],
@@ -130,7 +129,6 @@ def prepare_csv():
     )
     history_df = pd.concat([total_row, history_df], ignore_index=True)
 
-    # CSVに変換
     csv_buffer = io.StringIO()
     history_df.to_csv(csv_buffer, index=False, encoding="utf-8-sig")
     csv_data = csv_buffer.getvalue().encode("utf-8-sig")
@@ -141,7 +139,6 @@ def prepare_csv():
 if ss.phase == "done":
     st.success("全問正解！お疲れさまでした🎉")
 
-    # 合計時間を計算（内部は秒）
     total_seconds = 0
     for rec in ss.history:
         if isinstance(rec, (list, tuple)) and len(rec) >= 5:
@@ -167,11 +164,12 @@ if ss.phase == "done":
 if ss.phase == "finished" and ss.show_save_ui:
     st.subheader("学習履歴の保存")
 
-    # ✅ 氏名入力欄は key を使って更新が反映されるようにする
-    st.text_input("氏名を入力してください", key="user_name_input")
+    with st.form("save_form", clear_on_submit=True):
+        name = st.text_input("氏名", key="user_name_input", placeholder="例：山田太郎")
+        submitted = st.form_submit_button("リターンで確定")
 
-    if st.button("保存"):
-        ss.user_name = st.session_state["user_name_input"]
+    if submitted:
+        ss.user_name = name
         if not ss.user_name:
             st.warning("氏名を入力してください。")
         else:
@@ -184,7 +182,7 @@ if ss.phase == "finished" and ss.show_save_ui:
             )
 
 # ==== 新しい問題を必ずセット ====
-if ss.current is None and ss.phase == "quiz":
+if ss.phase == "quiz" and ss.current is None:
     next_question()
 
 # ==== 出題 ====
@@ -196,7 +194,6 @@ if ss.phase == "quiz" and ss.current:
         ans = st.text_input("最初の2文字を入力（半角英数字）", max_chars=2, key="answer_box")
         submitted = st.form_submit_button("解答（Enter）")
 
-    # 自動フォーカス
     components.html(
         """
         <script>
@@ -211,7 +208,6 @@ if ss.phase == "quiz" and ss.current:
         status = "正解" if check_answer(ans) else "不正解"
         elapsed = int(time.time() - ss.question_start_time) if ss.question_start_time else 0
 
-        # ✅ ss.history には int の秒数を保存する
         ss.history.append((ss.counter, current["単語"], current["意味"], status, elapsed))
         ss.counter += 1
 
