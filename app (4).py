@@ -76,7 +76,7 @@ def next_question():
     ss.current = random.choice(ss.remaining)
     ss.phase = "quiz"
     ss.last_outcome = None
-    ss.question_start_time = time.time()  # ✅ 出題開始時間を記録
+    ss.question_start_time = time.time()
 
 def check_answer(ans: str) -> bool:
     word = ss.current["単語"]
@@ -100,14 +100,12 @@ def prepare_csv():
     cleaned_history = []
     total_seconds = 0
     for record in ss.history:
-        # ✅ 必ず5要素に揃える
         rec = list(record) if isinstance(record, (list, tuple)) else [record]
         while len(rec) < 5:
             rec.append("")
         rec = rec[:5]
 
         order, word, meaning, result, elapsed = rec
-
         try:
             elapsed_int = int(elapsed)
         except:
@@ -121,7 +119,6 @@ def prepare_csv():
         columns=["順番", "単語", "意味", "正誤", "解答時間"]
     )
 
-    # ✅ 合計時間を冒頭に追加
     total_time_str = format_time(total_seconds)
     total_row = pd.DataFrame(
         [["", "", "", "合計時間", total_time_str]],
@@ -165,7 +162,8 @@ if ss.phase == "finished" and ss.show_save_ui:
     st.subheader("学習履歴の保存")
 
     with st.form("save_form", clear_on_submit=True):
-        name = st.text_input("氏名", key="user_name_input", placeholder="例：山田太郎")
+        # ✅ 前回入力氏名を placeholder としてグレー表示
+        name = st.text_input("氏名", key="user_name_input", value="", placeholder=ss.user_name if ss.user_name else "例：山田太郎")
         submitted = st.form_submit_button("リターンで確定")
 
     if submitted:
@@ -181,7 +179,7 @@ if ss.phase == "finished" and ss.show_save_ui:
                 mime="text/csv"
             )
 
-# ==== 新しい問題を必ずセット ====
+# ==== 最初の問題を必ずセット ====
 if ss.phase == "quiz" and ss.current is None:
     next_question()
 
