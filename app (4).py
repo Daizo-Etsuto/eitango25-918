@@ -13,7 +13,7 @@ col1, col2 = st.columns([3, 2])
 with col1:
     uploaded_file = st.file_uploader("単語リスト（CSV, UTF-8推奨）をアップロードしてください", type=["csv"])
 with col2:
-    st.markdown("例：2025-9-31まで利用可能")
+    st.markdown("2025-9-31まで利用可能")
 
 if uploaded_file is None:
     st.info("まずは CSV をアップロードしてください。")
@@ -167,3 +167,4 @@ if ss.phase == "feedback" and ss.last_outcome:
     if st.button("次の問題へ"):
         next_question()
         st.rerun()
+
