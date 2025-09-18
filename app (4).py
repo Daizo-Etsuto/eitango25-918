@@ -4,7 +4,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 import time  # ✅ 追加：時間計測用
 
-st.title("英単語テスト（CSV版・安定版）")
+st.title("英単語テスト（CSV版・保存版）")
 
 uploaded_file = st.file_uploader("単語リスト（CSV, UTF-8推奨）をアップロードしてください", type=["csv"])
 if uploaded_file is None:
@@ -117,3 +117,4 @@ if ss.phase == "feedback" and ss.last_outcome:
     if st.button("次の問題へ"):
         next_question()
         st.rerun()
+
