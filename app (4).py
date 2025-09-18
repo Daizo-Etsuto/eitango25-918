@@ -6,7 +6,7 @@ import time
 from datetime import datetime, date
 import io
 
-st.title("英単語テスト（CSV版・スマホ可）")
+st.title("英単語テスト（CSV版・スマホ対応・期限付き）")
 
 # ==== 利用期限チェック ====
 limit_date = date(2025, 9, 30)  # 利用期限を 2025-09-30 に設定
@@ -97,12 +97,17 @@ def prepare_csv():
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"{ss.user_name}_{timestamp}.csv"
 
-    # ✅ 各問題の解答時間は "分 秒" 形式
     cleaned_history = []
     total_seconds = 0
     for record in ss.history:
         if len(record) == 5:
             order, word, meaning, result, elapsed = record
+            # 安全のため int にキャスト
+            if not isinstance(elapsed, int):
+                try:
+                    elapsed = int(elapsed)
+                except:
+                    elapsed = 0
             total_seconds += elapsed
             cleaned_history.append((order, word, meaning, result, format_time(elapsed)))
         else:
@@ -134,7 +139,7 @@ if ss.phase == "done":
     st.success("全問正解！お疲れさまでした🎉")
 
     # 合計時間を計算
-    total_seconds = sum([rec[4] for rec in ss.history if len(rec) == 5])
+    total_seconds = sum([int(rec[4]) for rec in ss.history if len(rec) == 5])
     st.info(f"合計学習時間: {format_time(total_seconds)}")
 
     col1, col2 = st.columns(2)
@@ -186,6 +191,7 @@ if ss.phase == "quiz" and ss.current:
         status = "正解" if check_answer(ans) else "不正解"
         elapsed = int(time.time() - ss.question_start_time) if ss.question_start_time else 0
 
+        # ✅ ss.history には int の秒数を保存する
         ss.history.append((ss.counter, current["単語"], current["意味"], status, elapsed))
         ss.counter += 1
 
