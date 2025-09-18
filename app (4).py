@@ -177,6 +177,10 @@ if ss.phase == "finished" and ss.show_save_ui:
             mime="text/csv"
         )
 
+# ==== 新しい問題を必ずセット ====
+if ss.current is None and ss.phase == "quiz":
+    next_question()
+
 # ==== 出題 ====
 if ss.phase == "quiz" and ss.current:
     current = ss.current
