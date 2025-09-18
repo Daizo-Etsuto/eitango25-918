@@ -54,7 +54,6 @@ if "last_outcome" not in ss: ss.last_outcome = None
 if "start_time" not in ss: ss.start_time = time.time()  # 全体開始
 if "history" not in ss: ss.history = []  # [(順番, 単語, 意味, 正誤, 解答時間秒)]
 if "show_save_ui" not in ss: ss.show_save_ui = False
-if "user_name" not in ss: ss.user_name = ""
 if "counter" not in ss: ss.counter = 1   # 学習順序カウンタ
 if "question_start_time" not in ss: ss.question_start_time = None  # 各問題開始時刻
 
@@ -167,15 +166,22 @@ if ss.phase == "done":
 # ==== 終了後の保存UI ====
 if ss.phase == "finished" and ss.show_save_ui:
     st.subheader("学習履歴の保存")
-    ss.user_name = st.text_input("氏名を入力してください", value=ss.user_name)
-    if ss.user_name:
-        filename, csv_data, total_time_str = prepare_csv()
-        st.download_button(
-            label="📥 保存（ダウンロード）",
-            data=csv_data,
-            file_name=filename,
-            mime="text/csv"
-        )
+
+    # ✅ 氏名入力欄は key を使って更新が反映されるようにする
+    st.text_input("氏名を入力してください", key="user_name_input")
+
+    if st.button("保存"):
+        ss.user_name = st.session_state["user_name_input"]
+        if not ss.user_name:
+            st.warning("氏名を入力してください。")
+        else:
+            filename, csv_data, total_time_str = prepare_csv()
+            st.download_button(
+                label="📥 保存（ダウンロード）",
+                data=csv_data,
+                file_name=filename,
+                mime="text/csv"
+            )
 
 # ==== 新しい問題を必ずセット ====
 if ss.current is None and ss.phase == "quiz":
