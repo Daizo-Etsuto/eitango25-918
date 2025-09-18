@@ -100,20 +100,22 @@ def prepare_csv():
     cleaned_history = []
     total_seconds = 0
     for record in ss.history:
-        if len(record) == 5:
-            order, word, meaning, result, elapsed = record
-            # 安全のため int にキャスト
-            if not isinstance(elapsed, int):
-                try:
-                    elapsed = int(elapsed)
-                except:
-                    elapsed = 0
-            total_seconds += elapsed
-            cleaned_history.append((order, word, meaning, result, format_time(elapsed)))
-        else:
-            fixed = list(record) + [""] * (5 - len(record))
-            cleaned_history.append(tuple(fixed))
+        # ✅ 必ず5要素に揃える
+        if len(record) != 5:
+            record = list(record) + [""] * (5 - len(record))
 
+        order, word, meaning, result, elapsed = record
+
+        # ✅ elapsed を数値に揃える
+        try:
+            elapsed_int = int(elapsed)
+        except:
+            elapsed_int = 0
+
+        total_seconds += elapsed_int
+        cleaned_history.append((order, word, meaning, result, format_time(elapsed_int)))
+
+    # ✅ DataFrame化
     history_df = pd.DataFrame(
         cleaned_history,
         columns=["順番", "単語", "意味", "正誤", "解答時間"]
@@ -138,8 +140,14 @@ def prepare_csv():
 if ss.phase == "done":
     st.success("全問正解！お疲れさまでした🎉")
 
-    # 合計時間を計算
-    total_seconds = sum([int(rec[4]) for rec in ss.history if len(rec) == 5])
+    # 合計時間を計算（内部は秒）
+    total_seconds = 0
+    for rec in ss.history:
+        if len(rec) == 5:
+            try:
+                total_seconds += int(rec[4])
+            except:
+                pass
     st.info(f"合計学習時間: {format_time(total_seconds)}")
 
     col1, col2 = st.columns(2)
