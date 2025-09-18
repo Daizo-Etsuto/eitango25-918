@@ -3,10 +3,10 @@ import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
 import time
-import os
 from datetime import datetime
+import io
 
-st.title("英単語テスト（CSV版・改良版）")
+st.title("英単語テスト（CSV版・スマホ対応）")
 
 # ==== ファイルアップロード ====
 col1, col2 = st.columns([3, 2])
@@ -61,22 +61,23 @@ def reset_quiz():
     ss.start_time = time.time()
     ss.history = []
 
-def save_history(save_dir):
-    if not ss.user_name or not save_dir:
-        st.warning("氏名と保存先を入力してください。")
-        return
-    os.makedirs(save_dir, exist_ok=True)
+def prepare_csv():
+    """履歴をCSVにまとめて、ダウンロード可能にする"""
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"{ss.user_name}_{timestamp}.csv"
-    filepath = os.path.join(save_dir, filename)
 
     elapsed = int(time.time() - ss.start_time)
     minutes = elapsed // 60
     seconds = elapsed % 60
+
     history_df = pd.DataFrame(ss.history, columns=["学習単語"])
     history_df["学習時間"] = f"{minutes}分{seconds}秒"
-    history_df.to_csv(filepath, index=False, encoding="utf-8-sig")
-    st.success(f"学習履歴を保存しました: {filepath}")
+
+    csv_buffer = io.StringIO()
+    history_df.to_csv(csv_buffer, index=False, encoding="utf-8-sig")
+    csv_data = csv_buffer.getvalue().encode("utf-8-sig")
+
+    return filename, csv_data
 
 # ==== 全問終了 ====
 if ss.phase == "done":
@@ -104,15 +105,14 @@ if ss.phase == "finished" and ss.show_save_ui:
 
     ss.user_name = st.text_input("氏名を入力してください", value=ss.user_name)
 
-    # 保存先候補の取得（カレントディレクトリ直下のフォルダを候補に）
-    current_dir = os.getcwd()
-    folders = [f for f in os.listdir(current_dir) if os.path.isdir(os.path.join(current_dir, f))]
-    folders.insert(0, current_dir)  # カレントディレクトリ自体も候補に追加
-
-    save_dir = st.selectbox("保存先フォルダを選択してください", folders, index=0)
-
-    if st.button("保存"):
-        save_history(save_dir)
+    if ss.user_name:
+        filename, csv_data = prepare_csv()
+        st.download_button(
+            label="📥 保存（ダウンロード）",
+            data=csv_data,
+            file_name=filename,
+            mime="text/csv"
+        )
 
 # ==== 新しい問題 ====
 if ss.current is None and ss.phase == "quiz":
