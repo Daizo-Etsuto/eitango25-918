@@ -101,10 +101,12 @@ def prepare_csv():
     total_seconds = 0
     for record in ss.history:
         # ✅ 必ず5要素に揃える
-        if len(record) != 5:
-            record = list(record) + [""] * (5 - len(record))
+        rec = list(record) if isinstance(record, (list, tuple)) else [record]
+        while len(rec) < 5:
+            rec.append("")
+        rec = rec[:5]  # 多すぎても切り詰める
 
-        order, word, meaning, result, elapsed = record
+        order, word, meaning, result, elapsed = rec
 
         # ✅ elapsed を数値に揃える
         try:
@@ -143,7 +145,7 @@ if ss.phase == "done":
     # 合計時間を計算（内部は秒）
     total_seconds = 0
     for rec in ss.history:
-        if len(rec) == 5:
+        if isinstance(rec, (list, tuple)) and len(rec) >= 5:
             try:
                 total_seconds += int(rec[4])
             except:
