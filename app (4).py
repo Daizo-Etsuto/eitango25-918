@@ -3,33 +3,17 @@ import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
 import time
-from datetime import datetime, date
+from datetime import datetime
 import io
 
 st.title("英単語テスト（CSV版・スマホ対応）")
-
-# ==== 利用期限と入試カウントダウン ====
-expire_date = date(2025, 9, 30)
-exam_date = date(2026, 1, 17)
-today = date.today()
-
-if today <= expire_date:
-    st.markdown(f"### ✅ 2025-9-30まで利用可能")
-    days_left = (exam_date - today).days
-    st.markdown(f"### 📝 入試まであと **{days_left}日**")
-else:
-    st.markdown(
-        "<h3 style='color:red;'>❌ 期限が終了しました。</h3>",
-        unsafe_allow_html=True
-    )
-    st.stop()
 
 # ==== ファイルアップロード ====
 col1, col2 = st.columns([3, 2])
 with col1:
     uploaded_file = st.file_uploader("単語リスト（CSV, UTF-8推奨）をアップロードしてください", type=["csv"])
 with col2:
-    st.markdown("例：2025-9-30まで利用可能")
+    st.markdown("例：2025-9-31まで利用可能")
 
 if uploaded_file is None:
     st.info("まずは CSV をアップロードしてください。")
