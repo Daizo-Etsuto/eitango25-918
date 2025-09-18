@@ -8,18 +8,6 @@ from datetime import datetime
 
 st.title("英単語テスト（CSV版・改良版）")
 
-# ==== 氏名入力欄 ====
-if "user_name" not in st.session_state:
-    st.session_state.user_name = ""
-user_name = st.text_input("氏名を入力してください", value=st.session_state.user_name)
-st.session_state.user_name = user_name
-
-# ==== 保存先入力欄 ====
-if "save_dir" not in st.session_state:
-    st.session_state.save_dir = ""
-save_dir = st.text_input("保存先ディレクトリを入力してください", value=st.session_state.save_dir)
-st.session_state.save_dir = save_dir
-
 # ==== ファイルアップロード ====
 col1, col2 = st.columns([3, 2])
 with col1:
@@ -45,10 +33,12 @@ if not {"単語", "意味"}.issubset(df.columns):
 ss = st.session_state
 if "remaining" not in ss: ss.remaining = df.to_dict("records")
 if "current" not in ss: ss.current = None
-if "phase" not in ss: ss.phase = "quiz"   # quiz / feedback / done
+if "phase" not in ss: ss.phase = "quiz"   # quiz / feedback / done / finished
 if "last_outcome" not in ss: ss.last_outcome = None
 if "start_time" not in ss: ss.start_time = time.time()
-if "history" not in ss: ss.history = []  # ✅ 学習履歴を保存
+if "history" not in ss: ss.history = []
+if "show_save_ui" not in ss: ss.show_save_ui = False
+if "user_name" not in ss: ss.user_name = ""
 
 def next_question():
     if not ss.remaining:
@@ -69,15 +59,15 @@ def reset_quiz():
     ss.phase = "quiz"
     ss.last_outcome = None
     ss.start_time = time.time()
-    ss.history = []  # ✅ 新しい学習履歴にリセット
+    ss.history = []
 
-def save_history():
-    if not user_name or not save_dir:
-        st.warning("氏名と保存先ディレクトリを入力してください。")
+def save_history(save_dir):
+    if not ss.user_name or not save_dir:
+        st.warning("氏名と保存先を入力してください。")
         return
     os.makedirs(save_dir, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"{user_name}_{timestamp}.csv"
+    filename = f"{ss.user_name}_{timestamp}.csv"
     filepath = os.path.join(save_dir, filename)
 
     elapsed = int(time.time() - ss.start_time)
@@ -102,10 +92,27 @@ if ss.phase == "done":
             reset_quiz()
             st.rerun()
     with col2:
-        if st.button("保存"):
-            save_history()
-
+        if st.button("終了"):
+            ss.show_save_ui = True
+            ss.phase = "finished"
+            st.rerun()
     st.stop()
+
+# ==== 終了後の保存UI ====
+if ss.phase == "finished" and ss.show_save_ui:
+    st.subheader("学習履歴の保存")
+
+    ss.user_name = st.text_input("氏名を入力してください", value=ss.user_name)
+
+    # 保存先候補の取得（カレントディレクトリ直下のフォルダを候補に）
+    current_dir = os.getcwd()
+    folders = [f for f in os.listdir(current_dir) if os.path.isdir(os.path.join(current_dir, f))]
+    folders.insert(0, current_dir)  # カレントディレクトリ自体も候補に追加
+
+    save_dir = st.selectbox("保存先フォルダを選択してください", folders, index=0)
+
+    if st.button("保存"):
+        save_history(save_dir)
 
 # ==== 新しい問題 ====
 if ss.current is None and ss.phase == "quiz":
@@ -134,10 +141,10 @@ if ss.phase == "quiz" and ss.current:
         if check_answer(ans):
             ss.remaining = [q for q in ss.remaining if q != current]
             ss.last_outcome = ("correct", current["単語"])
-            ss.history.append(current["単語"])  # ✅ 履歴に追加
+            ss.history.append(current["単語"])
         else:
             ss.last_outcome = ("wrong", current["単語"])
-            ss.history.append(current["単語"])  # ✅ 履歴に追加
+            ss.history.append(current["単語"])
         ss.phase = "feedback"
         st.rerun()
 
