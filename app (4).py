@@ -2,11 +2,31 @@ import random
 import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
-import time  # ✅ 追加：時間計測用
+import time
+import os
+from datetime import datetime
 
-st.title("英単語テスト（CSV版・保存版）")
+st.title("英単語テスト（CSV版・改良版）")
 
-uploaded_file = st.file_uploader("単語リスト（CSV, UTF-8推奨）をアップロードしてください", type=["csv"])
+# ==== 氏名入力欄 ====
+if "user_name" not in st.session_state:
+    st.session_state.user_name = ""
+user_name = st.text_input("氏名を入力してください", value=st.session_state.user_name)
+st.session_state.user_name = user_name
+
+# ==== 保存先入力欄 ====
+if "save_dir" not in st.session_state:
+    st.session_state.save_dir = ""
+save_dir = st.text_input("保存先ディレクトリを入力してください", value=st.session_state.save_dir)
+st.session_state.save_dir = save_dir
+
+# ==== ファイルアップロード ====
+col1, col2 = st.columns([3, 2])
+with col1:
+    uploaded_file = st.file_uploader("単語リスト（CSV, UTF-8推奨）をアップロードしてください", type=["csv"])
+with col2:
+    st.markdown("例：2025-9-31まで利用可能")
+
 if uploaded_file is None:
     st.info("まずは CSV をアップロードしてください。")
     st.stop()
@@ -27,7 +47,8 @@ if "remaining" not in ss: ss.remaining = df.to_dict("records")
 if "current" not in ss: ss.current = None
 if "phase" not in ss: ss.phase = "quiz"   # quiz / feedback / done
 if "last_outcome" not in ss: ss.last_outcome = None
-if "start_time" not in ss: ss.start_time = time.time()  # ✅ 開始時間を記録
+if "start_time" not in ss: ss.start_time = time.time()
+if "history" not in ss: ss.history = []  # ✅ 学習履歴を保存
 
 def next_question():
     if not ss.remaining:
@@ -42,26 +63,47 @@ def check_answer(ans: str) -> bool:
     word = ss.current["単語"]
     return word.lower().startswith(ans.strip().lower())
 
-def reset_quiz():  # ✅ 再スタート用
+def reset_quiz():
     ss.remaining = df.to_dict("records")
     ss.current = None
     ss.phase = "quiz"
     ss.last_outcome = None
-    ss.start_time = time.time()  # ✅ リセット時に開始時間を更新
+    ss.start_time = time.time()
+    ss.history = []  # ✅ 新しい学習履歴にリセット
+
+def save_history():
+    if not user_name or not save_dir:
+        st.warning("氏名と保存先ディレクトリを入力してください。")
+        return
+    os.makedirs(save_dir, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"{user_name}_{timestamp}.csv"
+    filepath = os.path.join(save_dir, filename)
+
+    elapsed = int(time.time() - ss.start_time)
+    minutes = elapsed // 60
+    seconds = elapsed % 60
+    history_df = pd.DataFrame(ss.history, columns=["学習単語"])
+    history_df["学習時間"] = f"{minutes}分{seconds}秒"
+    history_df.to_csv(filepath, index=False, encoding="utf-8-sig")
+    st.success(f"学習履歴を保存しました: {filepath}")
 
 # ==== 全問終了 ====
 if ss.phase == "done":
     st.success("全問正解！お疲れさまでした🎉")
-
-    # ✅ かかった時間を計算して表示
     elapsed = int(time.time() - ss.start_time)
     minutes = elapsed // 60
     seconds = elapsed % 60
     st.info(f"所要時間: {minutes}分 {seconds}秒")
 
-    if st.button("もう一回"):
-        reset_quiz()
-        st.rerun()
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("もう一回"):
+            reset_quiz()
+            st.rerun()
+    with col2:
+        if st.button("保存"):
+            save_history()
 
     st.stop()
 
@@ -78,7 +120,6 @@ if ss.phase == "quiz" and ss.current:
         ans = st.text_input("最初の2文字を入力（半角英数字）", max_chars=2, key="answer_box")
         submitted = st.form_submit_button("解答（Enter）")
 
-    # ✅ 自動フォーカス
     components.html(
         """
         <script>
@@ -93,8 +134,10 @@ if ss.phase == "quiz" and ss.current:
         if check_answer(ans):
             ss.remaining = [q for q in ss.remaining if q != current]
             ss.last_outcome = ("correct", current["単語"])
+            ss.history.append(current["単語"])  # ✅ 履歴に追加
         else:
             ss.last_outcome = ("wrong", current["単語"])
+            ss.history.append(current["単語"])  # ✅ 履歴に追加
         ss.phase = "feedback"
         st.rerun()
 
@@ -117,4 +160,3 @@ if ss.phase == "feedback" and ss.last_outcome:
     if st.button("次の問題へ"):
         next_question()
         st.rerun()
-
