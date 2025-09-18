@@ -6,7 +6,7 @@ import time
 from datetime import datetime, date
 import io
 
-st.title("英単語テスト（CSV版・スマホ）")
+st.title("英単語テスト（CSV版・スマホ可）")
 
 # ==== 利用期限チェック ====
 limit_date = date(2025, 9, 30)  # 利用期限を 2025-09-30 に設定
@@ -26,10 +26,10 @@ days_left = (exam_date - today).days
 # ==== ファイルアップロード ====
 col1, col2 = st.columns([3, 2])
 with col1:
-    uploaded_file = st.file_uploader("単語リスト（CSV, UTF-8）をアップロードしてください", type=["csv"])
+    uploaded_file = st.file_uploader("単語リスト（CSV, UTF-8推奨）をアップロードしてください", type=["csv"])
 with col2:
-    st.markdown(f"{limit_date}まで利用可能")
-    st.markdown(f"私立入試まであと **{days_left} 日**")
+    st.markdown(f"例：{limit_date}まで利用可能")
+    st.markdown(f"入試まであと **{days_left} 日**")
 
 if uploaded_file is None:
     st.info("まずは CSV をアップロードしてください。")
@@ -52,13 +52,22 @@ if "current" not in ss: ss.current = None
 if "phase" not in ss: ss.phase = "quiz"   # quiz / feedback / done / finished
 if "last_outcome" not in ss: ss.last_outcome = None
 if "start_time" not in ss: ss.start_time = time.time()  # 全体開始
-if "history" not in ss: ss.history = []  # [(順番, 単語, 意味, 正誤, 解答時間)]
+if "history" not in ss: ss.history = []  # [(順番, 単語, 意味, 正誤, 解答時間秒)]
 if "show_save_ui" not in ss: ss.show_save_ui = False
 if "user_name" not in ss: ss.user_name = ""
 if "counter" not in ss: ss.counter = 1   # 学習順序カウンタ
 if "question_start_time" not in ss: ss.question_start_time = None  # 各問題開始時刻
 
 # ==== 関数群 ====
+def format_time(seconds: int) -> str:
+    """秒を '分 秒' 形式に変換"""
+    minutes = seconds // 60
+    sec = seconds % 60
+    if minutes > 0:
+        return f"{minutes}分{sec}秒"
+    else:
+        return f"{sec}秒"
+
 def next_question():
     if not ss.remaining:
         ss.current = None
@@ -88,29 +97,45 @@ def prepare_csv():
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"{ss.user_name}_{timestamp}.csv"
 
-    history_df = pd.DataFrame(ss.history, columns=["順番", "単語", "意味", "正誤", "解答時間(秒)"])
+    # ✅ 各問題の解答時間は "分 秒" 形式
+    cleaned_history = []
+    total_seconds = 0
+    for record in ss.history:
+        if len(record) == 5:
+            order, word, meaning, result, elapsed = record
+            total_seconds += elapsed
+            cleaned_history.append((order, word, meaning, result, format_time(elapsed)))
+        else:
+            fixed = list(record) + [""] * (5 - len(record))
+            cleaned_history.append(tuple(fixed))
 
-    total_time = history_df["解答時間(秒)"].sum()
-    minutes = total_time // 60
-    seconds = total_time % 60
-    history_df["合計学習時間"] = f"{minutes}分{seconds}秒"
+    history_df = pd.DataFrame(
+        cleaned_history,
+        columns=["順番", "単語", "意味", "正誤", "解答時間"]
+    )
 
+    # ✅ 合計時間を冒頭に追加（分 秒）
+    total_time_str = format_time(total_seconds)
+    total_row = pd.DataFrame(
+        [["", "", "", "合計時間", total_time_str]],
+        columns=["順番", "単語", "意味", "正誤", "解答時間"]
+    )
+    history_df = pd.concat([total_row, history_df], ignore_index=True)
+
+    # CSVに変換
     csv_buffer = io.StringIO()
     history_df.to_csv(csv_buffer, index=False, encoding="utf-8-sig")
     csv_data = csv_buffer.getvalue().encode("utf-8-sig")
-    return filename, csv_data, total_time
+
+    return filename, csv_data, total_time_str
 
 # ==== 全問終了 ====
 if ss.phase == "done":
     st.success("全問正解！お疲れさまでした🎉")
 
     # 合計時間を計算
-    history_df = pd.DataFrame(ss.history, columns=["順番", "単語", "意味", "正誤", "解答時間(秒)"])
-    total_time = history_df["解答時間(秒)"].sum()
-    minutes = total_time // 60
-    seconds = total_time % 60
-
-    st.info(f"合計学習時間: {minutes}分 {seconds}秒")
+    total_seconds = sum([rec[4] for rec in ss.history if len(rec) == 5])
+    st.info(f"合計学習時間: {format_time(total_seconds)}")
 
     col1, col2 = st.columns(2)
     with col1:
@@ -129,7 +154,7 @@ if ss.phase == "finished" and ss.show_save_ui:
     st.subheader("学習履歴の保存")
     ss.user_name = st.text_input("氏名を入力してください", value=ss.user_name)
     if ss.user_name:
-        filename, csv_data, total_time = prepare_csv()
+        filename, csv_data, total_time_str = prepare_csv()
         st.download_button(
             label="📥 保存（ダウンロード）",
             data=csv_data,
@@ -192,4 +217,3 @@ if ss.phase == "feedback" and ss.last_outcome:
     if st.button("次の問題へ"):
         next_question()
         st.rerun()
-
