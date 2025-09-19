@@ -3,8 +3,15 @@ import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
 import time
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 import io
+
+# ==== 日本時間のタイムゾーン ====
+try:
+    from zoneinfo import ZoneInfo  # Python 3.9以降
+    JST = ZoneInfo("Asia/Tokyo")
+except Exception:
+    JST = timezone(timedelta(hours=9))  # フォールバック
 
 st.title("英単語テスト（CSV版・スマホ対応）")
 
@@ -36,7 +43,7 @@ if "current" not in ss: ss.current = None
 if "phase" not in ss: ss.phase = "quiz"   # quiz / feedback / done / finished
 if "last_outcome" not in ss: ss.last_outcome = None
 if "start_time" not in ss: ss.start_time = time.time()
-if "history" not in ss: ss.history = []
+if "history" not in ss: ss.history = []   # [{単語, 結果, 出題形式}]
 if "show_save_ui" not in ss: ss.show_save_ui = False
 if "user_name" not in ss: ss.user_name = ""
 
@@ -59,18 +66,18 @@ def reset_quiz():
     ss.phase = "quiz"
     ss.last_outcome = None
     ss.start_time = time.time()
-    ss.history = []
+    # 履歴は保持（累積する）
 
 def prepare_csv():
-    """履歴をCSVにまとめて、ダウンロード可能にする"""
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    """履歴をCSVにまとめて、ダウンロード可能にする（日本時間対応・詳細付き）"""
+    timestamp = datetime.now(JST).strftime("%Y%m%d_%H%M%S")
     filename = f"{ss.user_name}_{timestamp}.csv"
 
     elapsed = int(time.time() - ss.start_time)
     minutes = elapsed // 60
     seconds = elapsed % 60
 
-    history_df = pd.DataFrame(ss.history, columns=["学習単語"])
+    history_df = pd.DataFrame(ss.history)
     history_df["学習時間"] = f"{minutes}分{seconds}秒"
 
     csv_buffer = io.StringIO()
@@ -140,23 +147,23 @@ if ss.phase == "quiz" and ss.current:
     if submitted and ans and len(ans.strip()) == 2 and ans.isascii():
         if check_answer(ans):
             ss.remaining = [q for q in ss.remaining if q != current]
-            ss.last_outcome = ("correct", current["単語"])
-            ss.history.append(current["単語"])
+            ss.last_outcome = ("正解", current["単語"])
+            ss.history.append({"単語": current["単語"], "結果": "正解", "出題形式": "最初の２文字"})
         else:
-            ss.last_outcome = ("wrong", current["単語"])
-            ss.history.append(current["単語"])
+            ss.last_outcome = ("不正解", current["単語"])
+            ss.history.append({"単語": current["単語"], "結果": "不正解", "出題形式": "最初の２文字"})
         ss.phase = "feedback"
         st.rerun()
 
 # ==== フィードバック ====
 if ss.phase == "feedback" and ss.last_outcome:
     status, word = ss.last_outcome
-    if status == "correct":
+    if status == "正解":
         st.markdown(
             f"<div style='background:#e6ffe6;padding:6px;margin:2px 0;border-radius:6px;'>正解！ {word} 🎉</div>",
             unsafe_allow_html=True,
         )
-    elif status == "wrong":
+    elif status == "不正解":
         st.markdown(
             f"<div style='background:#ffe6e6;padding:6px;margin:2px 0;border-radius:6px;'>不正解！ 正解は {word}</div>",
             unsafe_allow_html=True,
