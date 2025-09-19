@@ -24,7 +24,7 @@ button, .stButton>button {padding: 0.3em 0.8em; margin: 0.2em 0;}
 """, unsafe_allow_html=True)
 
 # ==== タイトル（22px） ====
-st.markdown("<h1 style='font-size:18px;'>英単語テスト（CSV版・スマホ対応）</h1>", unsafe_allow_html=True)
+st.markdown("<h1 style='font-size:22px;'>英単語テスト（CSV版・スマホ対応）</h1>", unsafe_allow_html=True)
 
 # ==== ファイルアップロード ====
 col1, col2 = st.columns([3, 2])
@@ -183,4 +183,5 @@ if ss.phase == "feedback" and ss.last_outcome:
     if st.button("次の問題へ"):
         next_question()
         st.rerun()
+
 
