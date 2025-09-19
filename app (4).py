@@ -13,7 +13,18 @@ try:
 except Exception:
     JST = timezone(timedelta(hours=9))  # フォールバック
 
-st.title("英単語テスト（CSV版・スマホ対応）")
+# ==== スタイル調整（スマホ対応） ====
+st.markdown("""
+<style>
+h1, h2, h3, h4, h5, h6 {margin-top: 0.4em; margin-bottom: 0.4em;}
+p, div, label {margin-top: 0.2em; margin-bottom: 0.2em; line-height: 1.3;}
+button, .stButton>button {padding: 0.3em 0.8em; margin: 0.2em 0;}
+.stTextInput>div>div>input {padding: 0.2em; font-size: 16px;}
+</style>
+""", unsafe_allow_html=True)
+
+# ==== タイトル（22px） ====
+st.markdown("<h1 style='font-size:22px;'>英単語テスト（CSV版・スマホ対応）</h1>", unsafe_allow_html=True)
 
 # ==== ファイルアップロード ====
 col1, col2 = st.columns([3, 2])
@@ -132,7 +143,7 @@ if ss.phase == "quiz" and ss.current:
 
     with st.form("answer_form", clear_on_submit=True):
         ans = st.text_input("最初の2文字を入力（半角英数字）", max_chars=2, key="answer_box")
-        submitted = st.form_submit_button("解答（Enter）")
+        submitted = st.form_submit_button("解答")
 
     components.html(
         """
@@ -160,16 +171,14 @@ if ss.phase == "feedback" and ss.last_outcome:
     status, word = ss.last_outcome
     if status == "正解":
         st.markdown(
-            f"<div style='background:#e6ffe6;padding:6px;margin:2px 0;border-radius:6px;'>正解！ {word} 🎉</div>",
+            f"<div style='background:#e6ffe6;padding:4px;margin:2px 0;border-radius:6px;'>正解！ {word} 🎉</div>",
             unsafe_allow_html=True,
         )
     elif status == "不正解":
         st.markdown(
-            f"<div style='background:#ffe6e6;padding:6px;margin:2px 0;border-radius:6px;'>不正解！ 正解は {word}</div>",
+            f"<div style='background:#ffe6e6;padding:4px;margin:2px 0;border-radius:6px;'>不正解！ 正解は {word}</div>",
             unsafe_allow_html=True,
         )
-
-    st.write("下のボタンを押すか、Tabを押してからリターンを押してください。")
 
     if st.button("次の問題へ"):
         next_question()
