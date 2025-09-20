@@ -18,11 +18,15 @@ st.title("英単語テスト")
 # ==== ファイルアップロード ====
 col1, col2 = st.columns([3, 2])
 with col1:
-    uploaded_file = st.file_uploader("単語リスト（CSV, UTF-8推奨）をアップロードしてください", type=["csv"])
+    uploaded_file = st.file_uploader("単語リスト（CSV, UTF-8推奨）をアップロードしてください", type=["csv"], key="file_uploader")
 with col2:
     st.markdown("2025-9-31まで利用可能")
 
+# ==== ファイル削除時に初期化 ====
 if uploaded_file is None:
+    for key in list(st.session_state.keys()):
+        if key != "file_uploader":  # アップローダー自体は残す
+            del st.session_state[key]
     st.info("まずは CSV をアップロードしてください。")
     st.stop()
 
@@ -40,7 +44,7 @@ if not {"単語", "意味"}.issubset(df.columns):
 ss = st.session_state
 if "remaining" not in ss: ss.remaining = df.to_dict("records")
 if "current" not in ss: ss.current = None
-if "phase" not in ss: ss.phase = "quiz"   # quiz / feedback / done / finished / menu
+if "phase" not in ss: ss.phase = "quiz"   # quiz / feedback / done / finished
 if "last_outcome" not in ss: ss.last_outcome = None
 if "start_time" not in ss: ss.start_time = time.time()
 if "history" not in ss: ss.history = []   # [{単語, 結果, 出題形式, 経過秒}]
@@ -56,7 +60,7 @@ def next_question():
     ss.current = random.choice(ss.remaining)
     ss.phase = "quiz"
     ss.last_outcome = None
-    ss.q_start_time = time.time()  # 問題開始時刻を記録
+    ss.q_start_time = time.time()
 
 def check_answer(ans: str) -> bool:
     word = ss.current["単語"]
@@ -71,8 +75,13 @@ def reset_quiz():
     ss.q_start_time = time.time()
     # 履歴は保持（累積）
 
+def reset_all():
+    """完全リセット（保存後やファイル削除時に使う）"""
+    for key in list(st.session_state.keys()):
+        if key != "file_uploader":  # アップローダーは残す
+            del st.session_state[key]
+
 def prepare_csv():
-    """履歴をCSVにまとめて、ダウンロード可能にする"""
     timestamp = datetime.now(JST).strftime("%Y%m%d_%H%M%S")
     filename = f"{ss.user_name}_{timestamp}.csv"
 
@@ -81,7 +90,6 @@ def prepare_csv():
     seconds = elapsed % 60
 
     history_df = pd.DataFrame(ss.history)
-    # 「総学習時間」を最後に追加
     history_df["総学習時間"] = f"{minutes}分{seconds}秒"
 
     csv_buffer = io.StringIO()
@@ -93,9 +101,7 @@ def prepare_csv():
 if ss.phase == "done":
     st.success("全問正解！お疲れさまでした🎉")
     elapsed = int(time.time() - ss.start_time)
-    minutes = elapsed // 60
-    seconds = elapsed % 60
-    st.info(f"所要時間: {minutes}分 {seconds}秒")
+    st.info(f"所要時間: {elapsed//60}分 {elapsed%60}秒")
 
     col1, col2 = st.columns(2)
     with col1:
@@ -115,16 +121,9 @@ if ss.phase == "finished" and ss.show_save_ui:
     ss.user_name = st.text_input("氏名を入力してください", value=ss.user_name)
     if ss.user_name:
         filename, csv_data = prepare_csv()
-        # ✅ 保存ボタンを押したら初期状態に戻す
         if st.download_button("📥 保存（ダウンロード）", csv_data, filename, "text/csv"):
-            # セッションを初期化（新しく始められるように）
-            ss.remaining = df.to_dict("records")
-            ss.current = None
-            ss.phase = "quiz"
-            ss.last_outcome = None
-            ss.start_time = time.time()
-            ss.q_start_time = time.time()
-            ss.show_save_ui = False
+            # ✅ 保存後に初期化
+            reset_all()
             st.success("保存しました。新しい学習を始められます。")
             st.rerun()
 
@@ -152,7 +151,7 @@ if ss.phase == "quiz" and ss.current:
     )
 
     if submitted and ans and len(ans.strip()) == 2 and ans.isascii():
-        elapsed_q = int(time.time() - ss.q_start_time)  # この問題の経過秒
+        elapsed_q = int(time.time() - ss.q_start_time)
         if check_answer(ans):
             ss.remaining = [q for q in ss.remaining if q != current]
             ss.last_outcome = ("正解", current["単語"], elapsed_q)
@@ -171,7 +170,6 @@ if ss.phase == "feedback" and ss.last_outcome:
     else:
         st.markdown(f"<div style='background:#ffe6e6;padding:6px;margin:2px 0;border-radius:6px;'>不正解！ 正解は {word}</div>", unsafe_allow_html=True)
 
-    # ✅ 1秒待って次の問題へ自動進行
     time.sleep(1)
     next_question()
     st.rerun()
