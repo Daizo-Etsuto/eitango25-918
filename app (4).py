@@ -40,7 +40,7 @@ if not {"単語", "意味"}.issubset(df.columns):
 ss = st.session_state
 if "remaining" not in ss: ss.remaining = df.to_dict("records")
 if "current" not in ss: ss.current = None
-if "phase" not in ss: ss.phase = "quiz"   # quiz / feedback / done / finished
+if "phase" not in ss: ss.phase = "quiz"   # quiz / feedback / done / finished / menu
 if "last_outcome" not in ss: ss.last_outcome = None
 if "start_time" not in ss: ss.start_time = time.time()
 if "history" not in ss: ss.history = []   # [{単語, 結果, 出題形式, 経過秒}]
@@ -68,6 +68,7 @@ def reset_quiz():
     ss.phase = "quiz"
     ss.last_outcome = None
     ss.start_time = time.time()
+    ss.q_start_time = time.time()
     # 履歴は保持（累積）
 
 def prepare_csv():
@@ -114,7 +115,18 @@ if ss.phase == "finished" and ss.show_save_ui:
     ss.user_name = st.text_input("氏名を入力してください", value=ss.user_name)
     if ss.user_name:
         filename, csv_data = prepare_csv()
-        st.download_button("📥 保存（ダウンロード）", csv_data, filename, "text/csv")
+        # ✅ 保存ボタンを押したら初期状態に戻す
+        if st.download_button("📥 保存（ダウンロード）", csv_data, filename, "text/csv"):
+            # セッションを初期化（新しく始められるように）
+            ss.remaining = df.to_dict("records")
+            ss.current = None
+            ss.phase = "quiz"
+            ss.last_outcome = None
+            ss.start_time = time.time()
+            ss.q_start_time = time.time()
+            ss.show_save_ui = False
+            st.success("保存しました。新しい学習を始められます。")
+            st.rerun()
 
 # ==== 新しい問題 ====
 if ss.current is None and ss.phase == "quiz":
