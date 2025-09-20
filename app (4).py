@@ -6,12 +6,12 @@ import time
 from datetime import datetime, timedelta, timezone
 import io
 
-# ==== 日本時間のタイムゾーン ====
+# ==== 日本時間 ====
 try:
-    from zoneinfo import ZoneInfo  # Python 3.9以降
+    from zoneinfo import ZoneInfo
     JST = ZoneInfo("Asia/Tokyo")
 except Exception:
-    JST = timezone(timedelta(hours=9))  # フォールバック
+    JST = timezone(timedelta(hours=9))
 
 st.title("英単語テスト")
 
@@ -43,9 +43,10 @@ if "current" not in ss: ss.current = None
 if "phase" not in ss: ss.phase = "quiz"   # quiz / feedback / done / finished
 if "last_outcome" not in ss: ss.last_outcome = None
 if "start_time" not in ss: ss.start_time = time.time()
-if "history" not in ss: ss.history = []   # [{単語, 結果, 出題形式}]
+if "history" not in ss: ss.history = []   # [{単語, 結果, 出題形式, 経過秒}]
 if "show_save_ui" not in ss: ss.show_save_ui = False
 if "user_name" not in ss: ss.user_name = ""
+if "q_start_time" not in ss: ss.q_start_time = time.time()
 
 def next_question():
     if not ss.remaining:
@@ -55,6 +56,7 @@ def next_question():
     ss.current = random.choice(ss.remaining)
     ss.phase = "quiz"
     ss.last_outcome = None
+    ss.q_start_time = time.time()  # 問題開始時刻を記録
 
 def check_answer(ans: str) -> bool:
     word = ss.current["単語"]
@@ -66,10 +68,10 @@ def reset_quiz():
     ss.phase = "quiz"
     ss.last_outcome = None
     ss.start_time = time.time()
-    # 履歴は保持（累積する）
+    # 履歴は保持（累積）
 
 def prepare_csv():
-    """履歴をCSVにまとめて、ダウンロード可能にする（日本時間対応・詳細付き）"""
+    """履歴をCSVにまとめて、ダウンロード可能にする"""
     timestamp = datetime.now(JST).strftime("%Y%m%d_%H%M%S")
     filename = f"{ss.user_name}_{timestamp}.csv"
 
@@ -78,12 +80,12 @@ def prepare_csv():
     seconds = elapsed % 60
 
     history_df = pd.DataFrame(ss.history)
-    history_df["学習時間"] = f"{minutes}分{seconds}秒"
+    # 「総学習時間」を最後に追加
+    history_df["総学習時間"] = f"{minutes}分{seconds}秒"
 
     csv_buffer = io.StringIO()
     history_df.to_csv(csv_buffer, index=False, encoding="utf-8-sig")
     csv_data = csv_buffer.getvalue().encode("utf-8-sig")
-
     return filename, csv_data
 
 # ==== 全問終了 ====
@@ -109,17 +111,10 @@ if ss.phase == "done":
 # ==== 終了後の保存UI ====
 if ss.phase == "finished" and ss.show_save_ui:
     st.subheader("学習履歴の保存")
-
     ss.user_name = st.text_input("氏名を入力してください", value=ss.user_name)
-
     if ss.user_name:
         filename, csv_data = prepare_csv()
-        st.download_button(
-            label="📥 保存（ダウンロード）",
-            data=csv_data,
-            file_name=filename,
-            mime="text/csv"
-        )
+        st.download_button("📥 保存（ダウンロード）", csv_data, filename, "text/csv")
 
 # ==== 新しい問題 ====
 if ss.current is None and ss.phase == "quiz":
@@ -145,33 +140,26 @@ if ss.phase == "quiz" and ss.current:
     )
 
     if submitted and ans and len(ans.strip()) == 2 and ans.isascii():
+        elapsed_q = int(time.time() - ss.q_start_time)  # この問題の経過秒
         if check_answer(ans):
             ss.remaining = [q for q in ss.remaining if q != current]
-            ss.last_outcome = ("正解", current["単語"])
-            ss.history.append({"単語": current["単語"], "結果": "正解", "出題形式": "最初の２文字"})
+            ss.last_outcome = ("正解", current["単語"], elapsed_q)
+            ss.history.append({"単語": current["単語"], "結果": "正解", "出題形式": "最初の２文字", "経過秒": elapsed_q})
         else:
-            ss.last_outcome = ("不正解", current["単語"])
-            ss.history.append({"単語": current["単語"], "結果": "不正解", "出題形式": "最初の２文字"})
+            ss.last_outcome = ("不正解", current["単語"], elapsed_q)
+            ss.history.append({"単語": current["単語"], "結果": "不正解", "出題形式": "最初の２文字", "経過秒": elapsed_q})
         ss.phase = "feedback"
         st.rerun()
 
 # ==== フィードバック ====
 if ss.phase == "feedback" and ss.last_outcome:
-    status, word = ss.last_outcome
+    status, word, elapsed_q = ss.last_outcome
     if status == "正解":
-        st.markdown(
-            f"<div style='background:#e6ffe6;padding:6px;margin:2px 0;border-radius:6px;'>正解！ {word} 🎉</div>",
-            unsafe_allow_html=True,
-        )
-    elif status == "不正解":
-        st.markdown(
-            f"<div style='background:#ffe6e6;padding:6px;margin:2px 0;border-radius:6px;'>不正解！ 正解は {word}</div>",
-            unsafe_allow_html=True,
-        )
+        st.markdown(f"<div style='background:#e6ffe6;padding:6px;margin:2px 0;border-radius:6px;'>正解！ {word} 🎉</div>", unsafe_allow_html=True)
+    else:
+        st.markdown(f"<div style='background:#ffe6e6;padding:6px;margin:2px 0;border-radius:6px;'>不正解！ 正解は {word}</div>", unsafe_allow_html=True)
 
-    st.write("下のボタンを押すか、Tabを押してからリターンを押してください。")
-
-    if st.button("次の問題へ"):
-        next_question()
-        st.rerun()
-
+    # ✅ 1秒待って次の問題へ自動進行
+    time.sleep(1)
+    next_question()
+    st.rerun()
