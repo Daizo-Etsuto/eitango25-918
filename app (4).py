@@ -13,6 +13,17 @@ try:
 except Exception:
     JST = timezone(timedelta(hours=9))
 
+now = datetime.now(JST)
+
+# ==== 利用制限 ====
+if 0 <= now.hour < 6:  # 深夜0時～朝6時
+    st.error("本アプリは深夜0時～朝6時まで利用できません。")
+    st.stop()
+
+if now.date() >= datetime(2025, 11, 1, tzinfo=JST).date():  # 2025年11月1日以降
+    st.error("本アプリの利用期限は2025年10月31日までです。")
+    st.stop()
+
 st.title("英単語テスト")
 
 # ==== ファイルアップロード ====
@@ -20,12 +31,13 @@ col1, col2 = st.columns([3, 2])
 with col1:
     uploaded_file = st.file_uploader("単語リスト（CSV, UTF-8推奨）をアップロードしてください", type=["csv"], key="file_uploader")
 with col2:
-    st.markdown("2025-9-31まで利用可能")
+    st.markdown("2025-10-31まで利用可能")
 
 # ==== ファイル削除時に初期化 ====
 if uploaded_file is None:
+    # 完全リセット（アップローダーは残す）
     for key in list(st.session_state.keys()):
-        if key != "file_uploader":  # アップローダー自体は残す
+        if key != "file_uploader":
             del st.session_state[key]
     st.info("まずは CSV をアップロードしてください。")
     st.stop()
@@ -46,7 +58,9 @@ if "remaining" not in ss: ss.remaining = df.to_dict("records")
 if "current" not in ss: ss.current = None
 if "phase" not in ss: ss.phase = "quiz"   # quiz / feedback / done / finished
 if "last_outcome" not in ss: ss.last_outcome = None
-if "start_time" not in ss: ss.start_time = time.time()
+# ラウンド開始時刻 / 累積時間（総学習時間）
+if "segment_start" not in ss: ss.segment_start = time.time()
+if "total_elapsed" not in ss: ss.total_elapsed = 0
 if "history" not in ss: ss.history = []   # [{単語, 結果, 出題形式, 経過秒}]
 if "show_save_ui" not in ss: ss.show_save_ui = False
 if "user_name" not in ss: ss.user_name = ""
@@ -71,7 +85,6 @@ def reset_quiz():
     ss.current = None
     ss.phase = "quiz"
     ss.last_outcome = None
-    ss.start_time = time.time()
     ss.q_start_time = time.time()
     # 履歴は保持（累積）
 
@@ -85,9 +98,10 @@ def prepare_csv():
     timestamp = datetime.now(JST).strftime("%Y%m%d_%H%M%S")
     filename = f"{ss.user_name}_{timestamp}.csv"
 
-    elapsed = int(time.time() - ss.start_time)
-    minutes = elapsed // 60
-    seconds = elapsed % 60
+    # 総学習時間（全ラウンド合算）
+    total_seconds = int(ss.total_elapsed + (time.time() - ss.segment_start))
+    minutes = total_seconds // 60
+    seconds = total_seconds % 60
 
     history_df = pd.DataFrame(ss.history)
     history_df["総学習時間"] = f"{minutes}分{seconds}秒"
@@ -100,12 +114,13 @@ def prepare_csv():
 # ==== 全問終了 ====
 if ss.phase == "done":
     st.success("全問正解！お疲れさまでした🎉")
-    elapsed = int(time.time() - ss.start_time)
-    st.info(f"所要時間: {elapsed//60}分 {elapsed%60}秒")
 
     col1, col2 = st.columns(2)
     with col1:
         if st.button("もう一回"):
+            # 直前ラウンド分を累積に加算してから次ラウンドへ
+            ss.total_elapsed += time.time() - ss.segment_start
+            ss.segment_start = time.time()
             reset_quiz()
             st.rerun()
     with col2:
@@ -122,7 +137,7 @@ if ss.phase == "finished" and ss.show_save_ui:
     if ss.user_name:
         filename, csv_data = prepare_csv()
         if st.download_button("📥 保存（ダウンロード）", csv_data, filename, "text/csv"):
-            # ✅ 保存後に初期化
+            # 保存後に初期化
             reset_all()
             st.success("保存しました。新しい学習を始められます。")
             st.rerun()
@@ -151,7 +166,7 @@ if ss.phase == "quiz" and ss.current:
     )
 
     if submitted and ans and len(ans.strip()) == 2 and ans.isascii():
-        elapsed_q = int(time.time() - ss.q_start_time)
+        elapsed_q = int(time.time() - ss.q_start_time)  # この問題の経過秒
         if check_answer(ans):
             ss.remaining = [q for q in ss.remaining if q != current]
             ss.last_outcome = ("正解", current["単語"], elapsed_q)
@@ -170,6 +185,7 @@ if ss.phase == "feedback" and ss.last_outcome:
     else:
         st.markdown(f"<div style='background:#ffe6e6;padding:6px;margin:2px 0;border-radius:6px;'>不正解！ 正解は {word}</div>", unsafe_allow_html=True)
 
+    # 1秒待って次の問題へ自動進行
     time.sleep(1)
     next_question()
     st.rerun()
