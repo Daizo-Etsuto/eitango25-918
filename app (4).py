@@ -24,7 +24,7 @@ if now.date() >= datetime(2025, 11, 1, tzinfo=JST).date():  # 2025年11月1日�
     st.error("本アプリの利用期限は2025年10月31日までです。")
     st.stop()
 
-st.title("英単語テスト（最初の2文字入力）")
+st.markdown("<h1 style='font-size:22px;'>英単語（最初の２文字入力）</h1>", unsafe_allow_html=True)
 
 # ==== ファイルアップロード ====
 col1, col2 = st.columns([3, 2])
@@ -205,3 +205,4 @@ if ss.phase == "finished" and ss.show_save_ui:
             reset_all()
             st.success("保存しました。新しい学習を始められます。")
             st.rerun()
+
